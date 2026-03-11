@@ -11,3 +11,6 @@ cwd = "."
 
 [assets]
 directory = "./out"
+
+# 明确指定部署命令
+deploy_command = "npx wrangler pages deploy out"
