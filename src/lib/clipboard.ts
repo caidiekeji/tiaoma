@@ -1,118 +1,36 @@
 import { toast } from './toast';
 
-export interface ClipboardResult {
-  success: boolean;
-  error?: string;
-}
 
-export async function copyTextToClipboard(text: string): Promise<ClipboardResult> {
+export async function copyToClipboard(text: string, type: 'text' | 'image' = 'text'): Promise<boolean> {
   try {
-    if (!navigator.clipboard) {
-      const textArea = document.createElement('textarea');
-      textArea.value = text;
-      textArea.style.position = 'fixed';
-      textArea.style.left = '-999999px';
-      textArea.style.top = '-999999px';
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
-
-      const successful = document.execCommand('copy');
-      document.body.removeChild(textArea);
-
-      if (!successful) {
-        return { success: false, error: '复制失败' };
-      }
-
-      return { success: true };
-    }
-
-    await navigator.clipboard.writeText(text);
-    return { success: true };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : '复制失败',
-    };
-  }
-}
-
-export async function copyImageToClipboard(dataUrl: string): Promise<ClipboardResult> {
-  try {
-    if (!navigator.clipboard || !navigator.clipboard.write) {
-      return { success: false, error: '您的浏览器不支持复制图片功能' };
-    }
-
-    const response = await fetch(dataUrl);
-    const blob = await response.blob();
-
-    if (blob.type !== 'image/png') {
-      return { success: false, error: '仅支持复制 PNG 格式图片' };
-    }
-
-    await navigator.clipboard.write([
-      new ClipboardItem({
-        [blob.type]: blob,
-      }),
-    ]);
-
-    return { success: true };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : '复制图片失败',
-    };
-  }
-}
-
-export async function copySVGToClipboard(svgString: string): Promise<ClipboardResult> {
-  try {
-    const blob = new Blob([svgString], { type: 'image/svg+xml' });
-
-    if (!navigator.clipboard || !navigator.clipboard.write) {
-      return { success: false, error: '您的浏览器不支持复制图片功能' };
-    }
-
-    await navigator.clipboard.write([
-      new ClipboardItem({
-        [blob.type]: blob,
-      }),
-    ]);
-
-    return { success: true };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : '复制 SVG 失败',
-    };
-  }
-}
-
-export async function copyToClipboard(
-  data: string,
-  type: 'text' | 'image' | 'svg' = 'text',
-  showSuccessToast: boolean = true
-): Promise<boolean> {
-  let result: ClipboardResult;
-
-  switch (type) {
-    case 'image':
-      result = await copyImageToClipboard(data);
-      break;
-    case 'svg':
-      result = await copySVGToClipboard(data);
-      break;
-    default:
-      result = await copyTextToClipboard(data);
-  }
-
-  if (result.success) {
-    if (showSuccessToast) {
-      toast.success('已复制到剪贴板');
+    if (type === 'image') {
+      // 处理图片复制
+      const blob = await (await fetch(text)).blob();
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'image/png': blob,
+        }),
+      ]);
+      toast.success('图片已复制到剪贴板');
+    } else {
+      // 处理文本复制
+      await navigator.clipboard.writeText(text);
+      toast.success('文本已复制到剪贴板');
     }
     return true;
-  } else {
-    toast.error(result.error || '复制失败');
+  } catch (error) {
+    console.error('复制到剪贴板失败:', error);
+    toast.error('复制失败，请手动复制');
     return false;
+  }
+}
+
+export async function readFromClipboard(): Promise<string | null> {
+  try {
+    const text = await navigator.clipboard.readText();
+    return text;
+  } catch (error) {
+    console.error('从剪贴板读取失败:', error);
+    return null;
   }
 }

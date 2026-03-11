@@ -1,17 +1,24 @@
-export type BarcodeFormat = 'CODE128' | 'CODE39' | 'EAN13' | 'EAN8' | 'UPC' | 'ITF14';
+export type QRCodeErrorCorrectionLevel = 'L' | 'M' | 'Q' | 'H';
 
 export interface BarcodeOptions {
+  format: string;
+  value: string;
   width?: number;
   height?: number;
-  displayValue?: boolean;
-  font?: string;
   fontSize?: number;
+  fontOptions?: string;
+  font?: string;
+  text?: string;
+  textAlign?: string;
+  textPosition?: string;
   textMargin?: number;
-  margin?: number;
-  lineColor?: string;
   background?: string;
-  textAlign?: 'left' | 'center' | 'right';
-  textPosition?: 'bottom' | 'top';
+  lineColor?: string;
+  margin?: number;
+  marginTop?: number;
+  marginBottom?: number;
+  marginLeft?: number;
+  marginRight?: number;
 }
 
 export interface BarcodeResult {
@@ -19,10 +26,6 @@ export interface BarcodeResult {
   data?: string;
   error?: string;
 }
-
-export type QRCodeErrorCorrectionLevel = 'L' | 'M' | 'Q' | 'H';
-
-export type QRCodeOutputFormat = 'dataURL' | 'svg';
 
 export interface QRCodeOptions {
   width?: number;
@@ -32,7 +35,6 @@ export interface QRCodeOptions {
     light?: string;
   };
   errorCorrectionLevel?: QRCodeErrorCorrectionLevel;
-  outputFormat?: QRCodeOutputFormat;
 }
 
 export interface QRCodeResult {

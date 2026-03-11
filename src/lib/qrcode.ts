@@ -1,82 +1,108 @@
 import QRCode from 'qrcode';
-import type { QRCodeOptions, QRCodeResult, QRCodeErrorCorrectionLevel } from './types';
 
-export async function generateQRCode(
-  text: string,
-  options: QRCodeOptions = {}
-): Promise<QRCodeResult> {
-  if (!text || text.trim() === '') {
-    return {
-      success: false,
-      error: '输入文本不能为空',
-    };
-  }
+export type QRCodeErrorCorrectionLevel = 'L' | 'M' | 'Q' | 'H';
 
-  try {
-    const defaultOptions: QRCodeOptions = {
-      width: 300,
-      margin: 4,
-      color: {
-        dark: '#000000',
-        light: '#ffffff',
-      },
-      errorCorrectionLevel: 'M',
-      outputFormat: 'dataURL',
-    };
+export const ERROR_CORRECTION_LEVELS = {
+  L: '低 (7%)',
+  M: '中 (15%)',
+  Q: '较高 (25%)',
+  H: '高 (30%)',
+} as const;
 
-    const mergedOptions = { ...defaultOptions, ...options };
+export interface QRCodeOptions {
+  width?: number;
+  margin?: number;
+  color?: {
+    dark?: string;
+    light?: string;
+  };
+  errorCorrectionLevel?: QRCodeErrorCorrectionLevel;
+}
 
-    if (mergedOptions.outputFormat === 'svg') {
-      const svgString = await QRCode.toString(text, {
-        type: 'svg',
-        width: mergedOptions.width,
-        margin: mergedOptions.margin,
-        color: mergedOptions.color,
-        errorCorrectionLevel: mergedOptions.errorCorrectionLevel as QRCodeErrorCorrectionLevel,
-      });
-
-      return {
-        success: true,
-        data: svgString,
-      };
-    } else {
-      const dataURL = await QRCode.toDataURL(text, {
-        width: mergedOptions.width,
-        margin: mergedOptions.margin,
-        color: mergedOptions.color,
-        errorCorrectionLevel: mergedOptions.errorCorrectionLevel as QRCodeErrorCorrectionLevel,
-      });
-
-      return {
-        success: true,
-        data: dataURL,
-      };
-    }
-  } catch (error) {
-    return {
-      success: false,
-      error: `二维码生成失败: ${error instanceof Error ? error.message : '未知错误'}`,
-    };
-  }
+export interface QRCodeResult {
+  success: boolean;
+  data?: string;
+  error?: string;
 }
 
 export async function generateQRCodeDataURL(
   text: string,
-  options: Omit<QRCodeOptions, 'outputFormat'> = {}
+  options: QRCodeOptions = {}
 ): Promise<QRCodeResult> {
-  return generateQRCode(text, { ...options, outputFormat: 'dataURL' });
+  try {
+    const dataURL = await QRCode.toDataURL(text, {
+      width: options.width || 300,
+      margin: options.margin || 4,
+      color: {
+        dark: options.color?.dark || '#000000',
+        light: options.color?.light || '#ffffff',
+      },
+      errorCorrectionLevel: options.errorCorrectionLevel || 'M',
+    });
+
+    return {
+      success: true,
+      data: dataURL,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : '生成二维码失败',
+    };
+  }
 }
 
 export async function generateQRCodeSVG(
   text: string,
-  options: Omit<QRCodeOptions, 'outputFormat'> = {}
+  options: QRCodeOptions = {}
 ): Promise<QRCodeResult> {
-  return generateQRCode(text, { ...options, outputFormat: 'svg' });
+  try {
+    const svg = await QRCode.toString(text, {
+      type: 'svg',
+      width: options.width || 300,
+      margin: options.margin || 4,
+      color: {
+        dark: options.color?.dark || '#000000',
+        light: options.color?.light || '#ffffff',
+      },
+      errorCorrectionLevel: options.errorCorrectionLevel || 'M',
+    });
+
+    return {
+      success: true,
+      data: svg,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : '生成二维码失败',
+    };
+  }
 }
 
-export const ERROR_CORRECTION_LEVELS = {
-  L: '低 (约7%纠错能力)',
-  M: '中 (约15%纠错能力)',
-  Q: '四分之一 (约25%纠错能力)',
-  H: '高 (约30%纠错能力)',
-} as const;
+export async function generateQRCodePNG(
+  text: string,
+  options: QRCodeOptions = {}
+): Promise<QRCodeResult> {
+  try {
+    const buffer = await QRCode.toBuffer(text, {
+      width: options.width || 300,
+      margin: options.margin || 4,
+      color: {
+        dark: options.color?.dark || '#000000',
+        light: options.color?.light || '#ffffff',
+      },
+      errorCorrectionLevel: options.errorCorrectionLevel || 'M',
+    });
+
+    return {
+      success: true,
+      data: buffer.toString('base64'),
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : '生成二维码失败',
+    };
+  }
+}

@@ -1,39 +1,46 @@
-'use client';
+import React from 'react';
 
 interface LoadingSpinnerProps {
   size?: 'sm' | 'md' | 'lg';
-  color?: string;
   className?: string;
+  color?: string;
 }
-
-const SIZE_MAP = {
-  sm: 'h-4 w-4',
-  md: 'h-8 w-8',
-  lg: 'h-12 w-12',
-};
-
-const BORDER_WIDTH_MAP = {
-  sm: 'border-2',
-  md: 'border-3',
-  lg: 'border-4',
-};
 
 export default function LoadingSpinner({
   size = 'md',
-  color = 'blue-500',
   className = '',
+  color = 'currentColor',
 }: LoadingSpinnerProps) {
-  const sizeClass = SIZE_MAP[size];
-  const borderWidth = BORDER_WIDTH_MAP[size];
+  const sizeClasses = {
+    sm: 'w-4 h-4',
+    md: 'w-8 h-8',
+    lg: 'w-12 h-12',
+  };
 
   return (
-    <div
-      className={`animate-spin rounded-full ${sizeClass} ${borderWidth} border-gray-200 dark:border-gray-600 border-t-${color} ${className}`}
-      style={{ borderTopColor: color.startsWith('#') ? color : undefined }}
-      role="status"
-      aria-label="加载中"
-    >
-      <span className="sr-only">加载中...</span>
+    <div className={`inline-block ${sizeClasses[size]} ${className}`}>
+      <svg
+        className="animate-spin rounded-full border-2 border-t-transparent"
+        style={{ borderColor: color, borderTopColor: 'transparent' }}
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+      >
+        <circle
+          className="opacity-25"
+          cx="12"
+          cy="12"
+          r="10"
+          stroke={color}
+          strokeWidth="4"
+          fill="none"
+        />
+        <path
+          className="opacity-75"
+          fill={color}
+          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+        />
+      </svg>
     </div>
   );
 }

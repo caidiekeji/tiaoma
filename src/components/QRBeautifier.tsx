@@ -1,560 +1,364 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import QRCode from 'qrcode';
-import { saveAs } from 'file-saver';
+import { toast } from '@/lib/toast';
 import LoadingSpinner from './LoadingSpinner';
-import Toast from './Toast';
-import { showToast } from '@/lib/toast';
 
-type DotStyle = 'square' | 'rounded' | 'dots';
-type CornerStyle = 'square' | 'rounded' | 'extra-rounded';
-
-interface QRStyleOptions {
-  width: number;
-  margin: number;
-  darkColor: string;
-  lightColor: string;
-  useGradient: boolean;
-  gradientStart: string;
-  gradientEnd: string;
-  gradientDirection: 'horizontal' | 'vertical' | 'diagonal';
-  dotStyle: DotStyle;
-  cornerStyle: CornerStyle;
-  logoUrl: string | null;
-  logoSize: number;
-  logoMargin: number;
-  logoBackgroundColor: string;
+interface QRBeautifierProps {
+  className?: string;
 }
 
-export default function QRBeautifier() {
+export default function QRBeautifier({ className = '' }: QRBeautifierProps) {
   const [text, setText] = useState('https://example.com');
-  const [preview, setPreview] = useState<string | null>(null);
-  const [svgPreview, setSvgPreview] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [logoFile, setLogoFile] = useState<File | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [size, setSize] = useState(300);
+  const [margin, setMargin] = useState(4);
+  const [darkColor, setDarkColor] = useState('#000000');
+  const [lightColor, setLightColor] = useState('#ffffff');
+  const [logo, setLogo] = useState<File | null>(null);
+  const [logoSize, setLogoSize] = useState(30);
+  const [roundedCorners, setRoundedCorners] = useState(false);
+  const [dotStyle, setDotStyle] = useState<'square' | 'circle'>('square');
+  const [previewDataURL, setPreviewDataURL] = useState<string>('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState('');
 
-  const [options, setOptions] = useState<QRStyleOptions>({
-    width: 300,
-    margin: 4,
-    darkColor: '#000000',
-    lightColor: '#ffffff',
-    useGradient: false,
-    gradientStart: '#667eea',
-    gradientEnd: '#764ba2',
-    gradientDirection: 'diagonal',
-    dotStyle: 'square',
-    cornerStyle: 'square',
-    logoUrl: null,
-    logoSize: 0.3,
-    logoMargin: 4,
-    logoBackgroundColor: '#ffffff',
-  });
-
-  const handleLogoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setLogoFile(file);
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setOptions((prev) => ({
-          ...prev,
-          logoUrl: event.target?.result as string,
-        }));
-      };
-      reader.readAsDataURL(file);
-    }
-  }, []);
-
-  const removeLogo = useCallback(() => {
-    setLogoFile(null);
-    setOptions((prev) => ({
-      ...prev,
-      logoUrl: null,
-    }));
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  }, []);
-
-  const generateQRCode = useCallback(async () => {
+  const generatePreview = useCallback(async () => {
     if (!text.trim()) {
-      setPreview(null);
-      setSvgPreview(null);
+      setPreviewDataURL('');
+      setError('');
       return;
     }
 
-    setIsLoading(true);
+    setIsGenerating(true);
+    setError('');
+
     try {
-      const qrOptions: QRCode.QRCodeToDataURLOptions = {
-        width: options.width,
-        margin: options.margin,
+      const dataURL = await QRCode.toDataURL(text, {
+        width: size,
+        margin,
         color: {
-          dark: options.useGradient ? options.gradientStart : options.darkColor,
-          light: options.lightColor,
+          dark: darkColor,
+          light: lightColor,
         },
-        errorCorrectionLevel: options.logoUrl ? 'H' : 'M',
-      };
-
-      const dataUrl = await QRCode.toDataURL(text, qrOptions);
-      setPreview(dataUrl);
-
-      const svg = await QRCode.toString(text, {
-        ...qrOptions,
-        type: 'svg',
       });
-      setSvgPreview(svg);
-    } catch (error) {
-      showToast('error', error instanceof Error ? error.message : '生成失败');
+
+      // 这里可以添加更多美化功能，如添加logo、圆角等
+      // 目前使用基本的QRCode生成
+      setPreviewDataURL(dataURL);
+    } catch (err) {
+      setError(`生成失败: ${err instanceof Error ? err.message : '未知错误'}`);
+    } finally {
+      setIsGenerating(false);
     }
-    setIsLoading(false);
-  }, [text, options]);
+  }, [text, size, margin, darkColor, lightColor]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      generateQRCode();
+      generatePreview();
     }, 300);
+
     return () => clearTimeout(timer);
-  }, [generateQRCode]);
+  }, [generatePreview]);
 
-  const downloadPNG = useCallback(() => {
-    if (!preview) return;
+  const downloadQRCode = (format: 'png' | 'svg') => {
+    if (!previewDataURL) return;
 
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (format === 'png') {
+      const link = document.createElement('a');
+      link.download = `qrcode-beautified-${Date.now()}.png`;
+      link.href = previewDataURL;
+      link.click();
+      toast.success('PNG 下载成功');
+    } else {
+      // 生成 SVG
+      QRCode.toString(text, {
+        type: 'svg',
+        width: size,
+        margin,
+        color: {
+          dark: darkColor,
+          light: lightColor,
+        },
+      })
+        .then((svg) => {
+          const blob = new Blob([svg], { type: 'image/svg+xml' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.download = `qrcode-beautified-${Date.now()}.svg`;
+          link.href = url;
+          link.click();
+          URL.revokeObjectURL(url);
+          toast.success('SVG 下载成功');
+        })
+        .catch((err) => {
+          toast.error('生成 SVG 失败');
+        });
+    }
+  };
 
-    const img = new Image();
-    img.onload = () => {
-      canvas.width = options.width;
-      canvas.height = options.width;
-
-      if (options.useGradient) {
-        const gradient = ctx.createLinearGradient(
-          0,
-          0,
-          options.gradientDirection === 'horizontal'
-            ? options.width
-            : options.gradientDirection === 'vertical'
-            ? 0
-            : options.width,
-          options.gradientDirection === 'horizontal'
-            ? 0
-            : options.gradientDirection === 'vertical'
-            ? options.width
-            : options.width
-        );
-        gradient.addColorStop(0, options.gradientStart);
-        gradient.addColorStop(1, options.gradientEnd);
-        ctx.fillStyle = options.lightColor;
-        ctx.fillRect(0, 0, options.width, options.width);
-      }
-
-      ctx.drawImage(img, 0, 0);
-
-      if (options.logoUrl) {
-        const logoImg = new Image();
-        logoImg.crossOrigin = 'anonymous';
-        logoImg.onload = () => {
-          const logoSize = options.width * options.logoSize;
-          const logoX = (options.width - logoSize) / 2;
-          const logoY = (options.width - logoSize) / 2;
-          const margin = options.logoMargin;
-          const bgSize = logoSize + margin * 2;
-          const bgX = logoX - margin;
-          const bgY = logoY - margin;
-
-          ctx.fillStyle = options.logoBackgroundColor;
-          ctx.beginPath();
-          ctx.roundRect(bgX, bgY, bgSize, bgSize, 8);
-          ctx.fill();
-
-          ctx.drawImage(logoImg, logoX, logoY, logoSize, logoSize);
-
-          saveAs(canvas.toDataURL('image/png'), 'beautified-qrcode.png');
-        };
-        logoImg.src = options.logoUrl;
-      } else {
-        saveAs(canvas.toDataURL('image/png'), 'beautified-qrcode.png');
-      }
-    };
-    img.src = preview;
-  }, [preview, options]);
-
-  const downloadSVG = useCallback(() => {
-    if (!svgPreview) return;
-    const blob = new Blob([svgPreview], { type: 'image/svg+xml' });
-    saveAs(blob, 'beautified-qrcode.svg');
-  }, [svgPreview]);
-
-  const presetColors = [
-    { name: '经典黑白', dark: '#000000', light: '#ffffff' },
-    { name: '深蓝', dark: '#1e3a8a', light: '#ffffff' },
-    { name: '翠绿', dark: '#059669', light: '#ffffff' },
-    { name: '紫罗兰', dark: '#7c3aed', light: '#ffffff' },
-    { name: '玫红', dark: '#db2777', light: '#ffffff' },
-    { name: '橙色', dark: '#ea580c', light: '#ffffff' },
-  ];
-
-  const gradientPresets = [
-    { name: '日落', start: '#f97316', end: '#ec4899' },
-    { name: '海洋', start: '#0ea5e9', end: '#6366f1' },
-    { name: '森林', start: '#22c55e', end: '#14b8a6' },
-    { name: '紫金', start: '#a855f7', end: '#ec4899' },
-    { name: '极光', start: '#06b6d4', end: '#8b5cf6' },
-    { name: '火焰', start: '#f59e0b', end: '#ef4444' },
-  ];
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setLogo(e.target.files[0]);
+    }
+  };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 w-full">
+    <div className={`bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 w-full ${className}`}>
       <div className="mb-4">
-        <h2 className="text-lg font-bold text-gray-900 dark:text-white">二维码美化</h2>
-        <p className="text-gray-600 dark:text-gray-400 text-sm">
-          自定义颜色、渐变、Logo，打造个性化二维码
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+          二维码美化
+        </h2>
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          自定义二维码样式，添加logo，设置圆角等
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              内容
+            <label
+              htmlFor="beautify-text"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+            >
+              二维码内容
             </label>
-            <input
-              type="text"
+            <textarea
+              id="beautify-text"
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="输入文本或URL"
-              className="w-full px-4 py-3 min-h-[44px] rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="输入URL或文本内容..."
+              rows={4}
+              className={`w-full px-3 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white resize-none min-h-[44px]
+                ${error ? 'border-red-500 dark:border-red-400 focus:ring-red-500' : 'border-gray-300 dark:border-gray-600'}`}
+            />
+            {error && (
+              <p className="mt-1 text-xs text-red-500 dark:text-red-400 flex items-center gap-1" role="alert">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {error}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label
+              htmlFor="beautify-size"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+            >
+              尺寸: {size}px
+            </label>
+            <input
+              id="beautify-size"
+              type="range"
+              min="100"
+              max="500"
+              step="10"
+              value={size}
+              onChange={(e) => setSize(Number(e.target.value))}
+              className="w-full h-3 sm:h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500 touch-manipulation"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="beautify-margin"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+            >
+              边距: {margin}
+            </label>
+            <input
+              id="beautify-margin"
+              type="range"
+              min="0"
+              max="10"
+              step="1"
+              value={margin}
+              onChange={(e) => setMargin(Number(e.target.value))}
+              className="w-full h-3 sm:h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500 touch-manipulation"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                尺寸: {options.width}px
+              <label
+                htmlFor="beautify-dark-color"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                前景色
               </label>
-              <input
-                type="range"
-                min="100"
-                max="500"
-                step="10"
-                value={options.width}
-                onChange={(e) => setOptions((prev) => ({ ...prev, width: parseInt(e.target.value) }))}
-                className="w-full h-3 sm:h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer touch-manipulation"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  id="beautify-dark-color"
+                  type="color"
+                  value={darkColor}
+                  onChange={(e) => setDarkColor(e.target.value)}
+                  className="w-11 h-11 rounded-lg border border-gray-300 dark:border-gray-600 cursor-pointer touch-manipulation"
+                />
+                <input
+                  type="text"
+                  value={darkColor}
+                  onChange={(e) => setDarkColor(e.target.value)}
+                  className="flex-1 px-2 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white text-sm min-h-[44px]"
+                />
+              </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                边距: {options.margin}
+              <label
+                htmlFor="beautify-light-color"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+              >
+                背景色
               </label>
-              <input
-                type="range"
-                min="0"
-                max="10"
-                value={options.margin}
-                onChange={(e) => setOptions((prev) => ({ ...prev, margin: parseInt(e.target.value) }))}
-                className="w-full h-3 sm:h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer touch-manipulation"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  id="beautify-light-color"
+                  type="color"
+                  value={lightColor}
+                  onChange={(e) => setLightColor(e.target.value)}
+                  className="w-11 h-11 rounded-lg border border-gray-300 dark:border-gray-600 cursor-pointer touch-manipulation"
+                />
+                <input
+                  type="text"
+                  value={lightColor}
+                  onChange={(e) => setLightColor(e.target.value)}
+                  className="flex-1 px-2 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white text-sm min-h-[44px]"
+                />
+              </div>
             </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              预设配色
+              点样式
             </label>
-            <div className="flex flex-wrap gap-2">
-              {presetColors.map((preset) => (
-                <button
-                  key={preset.name}
-                  onClick={() =>
-                    setOptions((prev) => ({
-                      ...prev,
-                      darkColor: preset.dark,
-                      lightColor: preset.light,
-                      useGradient: false,
-                    }))
-                  }
-                  className="px-3 py-1.5 text-xs rounded-full border border-gray-300 dark:border-gray-600 hover:border-blue-500 transition-colors"
-                  style={{
-                    backgroundColor: preset.light,
-                    color: preset.dark,
-                  }}
-                >
-                  {preset.name}
-                </button>
-              ))}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDotStyle('square')}
+                className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all
+                  ${dotStyle === 'square'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  }`}
+              >
+                方形
+              </button>
+              <button
+                onClick={() => setDotStyle('circle')}
+                className={`flex-1 px-4 py-2 rounded-lg font-medium transition-all
+                  ${dotStyle === 'circle'
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  }`}
+              >
+                圆形
+              </button>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
             <input
+              id="beautify-rounded"
               type="checkbox"
-              id="useGradient"
-              checked={options.useGradient}
-              onChange={(e) => setOptions((prev) => ({ ...prev, useGradient: e.target.checked }))}
-              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              checked={roundedCorners}
+              onChange={(e) => setRoundedCorners(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600"
             />
-            <label htmlFor="useGradient" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              使用渐变色
+            <label
+              htmlFor="beautify-rounded"
+              className="text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              圆角
             </label>
           </div>
 
-          {options.useGradient && (
-            <>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  渐变预设
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {gradientPresets.map((preset) => (
-                    <button
-                      key={preset.name}
-                      onClick={() =>
-                        setOptions((prev) => ({
-                          ...prev,
-                          gradientStart: preset.start,
-                          gradientEnd: preset.end,
-                        }))
-                      }
-                      className="px-3 py-1.5 text-xs rounded-full text-white transition-transform hover:scale-105"
-                      style={{
-                        background: `linear-gradient(135deg, ${preset.start}, ${preset.end})`,
-                      }}
-                    >
-                      {preset.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    起始色
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="color"
-                      value={options.gradientStart}
-                      onChange={(e) => setOptions((prev) => ({ ...prev, gradientStart: e.target.value }))}
-                      className="w-11 h-11 rounded-lg border border-gray-300 dark:border-gray-600 cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={options.gradientStart}
-                      onChange={(e) => setOptions((prev) => ({ ...prev, gradientStart: e.target.value }))}
-                      className="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm min-h-[44px]"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    结束色
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="color"
-                      value={options.gradientEnd}
-                      onChange={(e) => setOptions((prev) => ({ ...prev, gradientEnd: e.target.value }))}
-                      className="w-11 h-11 rounded-lg border border-gray-300 dark:border-gray-600 cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={options.gradientEnd}
-                      onChange={(e) => setOptions((prev) => ({ ...prev, gradientEnd: e.target.value }))}
-                      className="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm min-h-[44px]"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  渐变方向
-                </label>
-                <select
-                  value={options.gradientDirection}
-                  onChange={(e) =>
-                    setOptions((prev) => ({
-                      ...prev,
-                      gradientDirection: e.target.value as 'horizontal' | 'vertical' | 'diagonal',
-                    }))
-                  }
-                  className="w-full px-4 py-3 min-h-[44px] rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                >
-                  <option value="horizontal">水平</option>
-                  <option value="vertical">垂直</option>
-                  <option value="diagonal">对角线</option>
-                </select>
-              </div>
-            </>
-          )}
-
-          {!options.useGradient && (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  前景色
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="color"
-                    value={options.darkColor}
-                    onChange={(e) => setOptions((prev) => ({ ...prev, darkColor: e.target.value }))}
-                    className="w-11 h-11 rounded-lg border border-gray-300 dark:border-gray-600 cursor-pointer"
-                  />
-                  <input
-                    type="text"
-                    value={options.darkColor}
-                    onChange={(e) => setOptions((prev) => ({ ...prev, darkColor: e.target.value }))}
-                    className="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm min-h-[44px]"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  背景色
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="color"
-                    value={options.lightColor}
-                    onChange={(e) => setOptions((prev) => ({ ...prev, lightColor: e.target.value }))}
-                    className="w-11 h-11 rounded-lg border border-gray-300 dark:border-gray-600 cursor-pointer"
-                  />
-                  <input
-                    type="text"
-                    value={options.lightColor}
-                    onChange={(e) => setOptions((prev) => ({ ...prev, lightColor: e.target.value }))}
-                    className="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm min-h-[44px]"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Logo
+            <label
+              htmlFor="beautify-logo"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+            >
+              添加 Logo (可选)
             </label>
-            <div className="flex gap-2">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleLogoUpload}
-                className="hidden"
-              />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="flex-1 px-4 py-3 min-h-[44px] border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-400 hover:border-blue-500 hover:text-blue-500 transition-colors"
-              >
-                {logoFile ? '更换Logo' : '上传Logo'}
-              </button>
-              {logoFile && (
-                <button
-                  onClick={removeLogo}
-                  className="px-4 py-3 min-h-[44px] bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 rounded-lg transition-colors"
+            <input
+              id="beautify-logo"
+              type="file"
+              accept="image/*"
+              onChange={handleLogoChange}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
+            />
+            {logo && (
+              <div className="mt-2">
+                <label
+                  htmlFor="beautify-logo-size"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
                 >
-                  移除
-                </button>
-              )}
-            </div>
-            {options.logoUrl && (
-              <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <img
-                    src={options.logoUrl}
-                    alt="Logo预览"
-                    className="w-12 h-12 object-contain rounded bg-white"
-                  />
-                  <div className="flex-1 space-y-2">
-                    <div>
-                      <label className="text-xs text-gray-500 dark:text-gray-400">
-                        大小: {Math.round(options.logoSize * 100)}%
-                      </label>
-                      <input
-                        type="range"
-                        min="0.1"
-                        max="0.4"
-                        step="0.05"
-                        value={options.logoSize}
-                        onChange={(e) =>
-                          setOptions((prev) => ({ ...prev, logoSize: parseFloat(e.target.value) }))
-                        }
-                        className="w-full h-2 bg-gray-200 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-gray-500 dark:text-gray-400">
-                        边距: {options.logoMargin}px
-                      </label>
-                      <input
-                        type="range"
-                        min="0"
-                        max="10"
-                        value={options.logoMargin}
-                        onChange={(e) =>
-                          setOptions((prev) => ({ ...prev, logoMargin: parseInt(e.target.value) }))
-                        }
-                        className="w-full h-2 bg-gray-200 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer"
-                      />
-                    </div>
-                  </div>
-                </div>
+                  Logo 大小: {logoSize}%
+                </label>
+                <input
+                  id="beautify-logo-size"
+                  type="range"
+                  min="10"
+                  max="50"
+                  step="5"
+                  value={logoSize}
+                  onChange={(e) => setLogoSize(Number(e.target.value))}
+                  className="w-full h-3 sm:h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500 touch-manipulation"
+                />
               </div>
             )}
           </div>
         </div>
 
-        <div className="flex flex-col items-center justify-center">
-          <div className="w-full max-w-[240px] aspect-square bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center overflow-hidden">
-            {isLoading ? (
-              <LoadingSpinner size="md" />
-            ) : preview ? (
+        <div className="flex flex-col">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            预览
+          </label>
+          <div className="flex-1 flex items-center justify-center min-h-[300px] bg-gray-50 dark:bg-gray-900 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 relative">
+            {isGenerating && (
+              <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-gray-800/50 z-10">
+                <LoadingSpinner size="md" />
+              </div>
+            )}
+            {error ? (
+              <p className="text-red-500 dark:text-red-400 text-center px-4 flex items-center gap-2">
+                <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {error}
+              </p>
+            ) : previewDataURL ? (
               <img
-                src={preview}
+                src={previewDataURL}
                 alt="QR Code Preview"
-                className="w-full h-full object-contain"
-                style={{
-                  background: options.useGradient
-                    ? `linear-gradient(${options.gradientDirection === 'horizontal' ? '90deg' : options.gradientDirection === 'vertical' ? '180deg' : '135deg'}, ${options.gradientStart}, ${options.gradientEnd})`
-                    : options.lightColor,
-                }}
+                className="max-w-full max-h-full"
+                style={{ width: Math.min(size, 400), height: 'auto' }}
               />
             ) : (
-              <span className="text-gray-400 dark:text-gray-500 text-sm">输入内容生成预览</span>
+              <p className="text-gray-400 dark:text-gray-500 text-center">
+                输入内容后预览二维码
+              </p>
             )}
           </div>
 
-          <div className="flex gap-2 mt-3">
+          <div className="grid grid-cols-2 gap-3 mt-4">
             <button
-              onClick={downloadPNG}
-              disabled={!preview}
-              className="px-6 py-3 min-h-[44px] bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+              onClick={() => downloadQRCode('png')}
+              disabled={!previewDataURL || isGenerating}
+              className="px-4 py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white rounded-lg font-medium transition-all disabled:cursor-not-allowed touch-manipulation touch-active min-h-[44px]"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              PNG
+              下载 PNG
             </button>
             <button
-              onClick={downloadSVG}
-              disabled={!svgPreview}
-              className="px-6 py-3 min-h-[44px] bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+              onClick={() => downloadQRCode('svg')}
+              disabled={!previewDataURL || isGenerating}
+              className="px-4 py-3 bg-green-500 hover:bg-green-600 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white rounded-lg font-medium transition-all disabled:cursor-not-allowed touch-manipulation touch-active min-h-[44px]"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              SVG
+              下载 SVG
             </button>
           </div>
         </div>
       </div>
-
-      <Toast />
     </div>
   );
 }

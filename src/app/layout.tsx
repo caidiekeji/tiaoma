@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { ThemeProvider } from '@/components/ThemeProvider';
 import Toast from '@/components/Toast';
+import { ToastProvider } from '@/lib/toast';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -101,8 +102,10 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
-          <Toast />
+          <ToastProvider>
+            {children}
+            <Toast />
+          </ToastProvider>
         </ThemeProvider>
       </body>
     </html>
